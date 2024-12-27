@@ -42,6 +42,11 @@ class power_market:
         self.components = components
         self.station_id = station_id
         self.pricing = pricing
+        self.electricity_price = self.pricing.electricity_price
+        if hasattr(self.pricing, 'electricity_price_pred'):
+            self.electricity_price_pred = self.pricing.electricity_price_pred
+        else:
+            self.electricity_price_pred = self.pricing.electricity_price
 
     def reset(self):
         self.traces = AttrDict(
@@ -70,11 +75,11 @@ class power_market:
             model.addConstrs( self.P_g_sell[t] == 0 for t in range(T))
 
     def cost(self, T):
-        return quicksum(self.pricing.electricity_price[self.time_step + t] * self.P_g_buy[t] - self.station_metadata.power_market.selling_price * self.P_g_sell[t] for t in range(T))
+        return quicksum(self.electricity_price_pred[self.time_step + t] * self.P_g_buy[t] - self.station_metadata.power_market.selling_price * self.P_g_sell[t] for t in range(T))
     
     @property
     def get_reward(self):
-        return self.pricing.electricity_price[self.time_step] * self.traces.P_g_buy[-1] - self.station_metadata.power_market.selling_price * self.traces.P_g_sell[-1]
+        return self.pricing.electricity_price[self.time_step-1] * self.traces.P_g_buy[-1] - self.station_metadata.power_market.selling_price * self.traces.P_g_sell[-1]
 
 
 
@@ -116,6 +121,42 @@ class EnergyHubEnv:
         self.heating_storage = TESS(self.components, self.station_id)
         self.absorption_chiller = absorption_chilling(self.components, self.station_id)
         self.cooling_storage = CESS(self.components, self.station_id)
+
+        self.get_forecast_data()
+
+
+
+
+    def get_forecast_data(self):
+        self.non_shiftable_load = self.energy_simulation.non_shiftable_load
+        if hasattr(self.energy_simulation, 'non_shiftable_load_pred'):
+            self.non_shiftable_load_pred = self.energy_simulation.non_shiftable_load_pred
+        else:
+            self.non_shiftable_load_pred = self.energy_simulation.non_shiftable_load
+        
+        self.heating_demand = self.energy_simulation.heating_demand
+        if hasattr(self.energy_simulation, 'heating_demand_pred'):
+            self.heating_demand_pred = self.energy_simulation.heating_demand_pred
+        else:
+            self.heating_demand_pred = self.energy_simulation.heating_demand
+
+        self.cooling_demand = self.energy_simulation.cooling_demand
+        if hasattr(self.energy_simulation, 'cooling_demand_pred'):
+            self.cooling_demand_pred = self.energy_simulation.cooling_demand_pred
+        else:
+            self.cooling_demand_pred = self.energy_simulation.cooling_demand
+        
+        self.solar_generation = self.energy_simulation.solar_generation
+        if hasattr(self.energy_simulation, 'solar_generation_pred'):
+            self.solar_generation_pred = self.energy_simulation.solar_generation_pred
+        else:
+            self.solar_generation_pred = self.energy_simulation.solar_generation
+        
+        self.P_solar_heat = self.solar_thermal_collector.P_solar_heat
+        if hasattr(self.solar_thermal_collector, 'P_solar_heat_pred'):
+            self.P_solar_heat_pred = self.solar_thermal_collector.P_solar_heat_pred
+        else:
+            self.P_solar_heat_pred = self.solar_thermal_collector.P_solar_heat
 
 
 
@@ -159,17 +200,17 @@ class EnergyHubEnv:
         self.cooling_storage.model(T, model)
 
         # 电力平衡  
-        model.addConstrs( (self.power_market.P_g_sell[t] + self.hydrogen_storage.P_el[t] + self.electrical_storage.P_bssc[t] + self.energy_simulation.non_shiftable_load[self.time_step + t]) 
-                            <= (self.power_market.P_g_buy[t] +  self.energy_simulation.solar_generation[self.time_step + t] + self.hydrogen_storage.P_fc[t] + self.electrical_storage.P_bssd[t]) for t in range(T))     
+        model.addConstrs( (self.power_market.P_g_sell[t] + self.hydrogen_storage.P_el[t] + self.electrical_storage.P_bssc[t] + self.non_shiftable_load_pred[self.time_step + t]) 
+                            <= (self.power_market.P_g_buy[t] +  self.solar_generation_pred[self.time_step + t] + self.hydrogen_storage.P_fc[t] + self.electrical_storage.P_bssd[t]) for t in range(T)) 
        
         
         # 热平衡
-        model.addConstrs( (self.heating_storage.g_tesc[t] + self.energy_simulation.heating_demand[self.time_step + t] + self.absorption_chiller.g_AC[t]) 
-                        <=(self.hydrogen_storage.g_fc[t] + self.heating_storage.g_tesd[t] + self.solar_thermal_collector.P_solar_heat[self.time_step + t]) for t in range(T)) 
-        
+        model.addConstrs( (self.heating_storage.g_tesc[t] + self.heating_demand_pred[self.time_step + t] + self.absorption_chiller.g_AC[t]) 
+                        <=(self.hydrogen_storage.g_fc[t] + self.heating_storage.g_tesd[t] + self.P_solar_heat_pred[self.time_step + t]) for t in range(T)) 
+       
 
         # 冷平衡
-        model.addConstrs( (self.cooling_storage.q_cssc[t] + self.energy_simulation.cooling_demand[self.time_step + t]) 
+        model.addConstrs( (self.cooling_storage.q_cssc[t] + self.cooling_demand_pred[self.time_step + t]) 
                         <= (self.absorption_chiller.q_AC[t]  + self.cooling_storage.q_cssd[t]) for t in range(T))
 
         ### Objective function

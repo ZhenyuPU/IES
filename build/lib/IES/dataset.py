@@ -47,15 +47,21 @@ class energy_simulation:
 
     def get_data(self):
         if self.pred_data:
-            df = pd.DataFrame(self.pred_data)
-        else:
-            if not self.data_path:
-                csv_path = files("IES.data").joinpath(f"{self.DATASET_NAME}/Building_{int(self.station_id[9:])}.csv")
-                df = pd.read_csv(csv_path)
-                df.fillna(0.1, inplace=True)
+            df_pred = pd.DataFrame(self.pred_data)
+            for col in df_pred.columns.to_list():
+                setattr(self, col + '_pred', df_pred[col][self.simulation_start_time_step : self.simulation_end_time_step + 24].to_numpy())
+                if col in ['non_shiftable_load_pred', 'heating_demand_pred', 'dhw_demand_pred', 'cooling_demand_pred', 'solar_generation_pred']:
+                    data = getattr(self, col + '_pred')
+                    scaled_data = data / max(max(data), 1e-3) * getattr(self, col + '_cap')
+                    setattr(self, col + '_pred', scaled_data)
+    
+        if not self.data_path:
+            csv_path = files("IES.data").joinpath(f"{self.DATASET_NAME}/Building_{int(self.station_id[9:])}.csv")
+            df = pd.read_csv(csv_path)
+            df.fillna(0.1, inplace=True)
 
-            else:
-                df = pd.read_csv(Path(self.data_path))
+        else:
+            df = pd.read_csv(Path(self.data_path))
         
         for col in df.columns.to_list():
             setattr(self, col, df[col][self.simulation_start_time_step : self.simulation_end_time_step + 24].to_numpy())
@@ -64,20 +70,21 @@ class energy_simulation:
                  scaled_data = data / max(max(data), 1e-3) * getattr(self, col + '_cap')
                  setattr(self, col, scaled_data)
 
-        if not self.pred_data:
-            self.heating_demand = self.heating_demand + self.dhw_demand  # 结合两种需求，预测数据已经包含
-
+        self.heating_demand = self.heating_demand + self.dhw_demand  # 结合两种需求，预测数据已经包含
 
         if not self.components['non_shiftable_load']['active']:
             self.non_shiftable_load = np.zeros_like(self.non_shiftable_load)
+            self.non_shiftable_load_pred = np.zeros_like(self.non_shiftable_load)
         if not self.components['heating_demand']['active']:
             self.heating_demand = np.zeros_like(self.non_shiftable_load)
+            self.heating_demand_pred = np.zeros_like(self.non_shiftable_load)
         if not self.components['cooling_demand']['active']:
             self.cooling_demand = np.zeros_like(self.non_shiftable_load)
+            self.cooling_demand_pred = np.zeros_like(self.non_shiftable_load)
         if not self.components['solar_generation']['active']:
             self.solar_generation = np.zeros_like(self.non_shiftable_load)
-        # if not self.components['indoor_dry_bulb_temperature']['active']:
-        #     self.indoor_dry_bulb_temperature = np.zeros_like(self.non_shiftable_load)
+            self.solar_generation_pred = np.zeros_like(self.non_shiftable_load)
+
         
         self.observations = df.columns.to_list() 
 
@@ -103,24 +110,24 @@ class Pricing:
     def get_data(self):
         if self.pred_data:
             if hasattr(self.pred_data, 'electricity_price') or 'electricity_price' in self.pred_data:
-                self.electricity_price = self.pred_data['electricity_price']
+                self.electricity_price_pred = self.pred_data['electricity_price']
             else:
                 first_key = next(iter(self.pred_data))  # 获取字典中的第一个键
                 shape = np.shape(self.pred_data[first_key])  # 获取其值的维度
-                self.electricity_price = np.zeros(shape)
+                self.electricity_price_pred = np.zeros(shape)
+
+        if not self.data_path:
+            csv_path = files("IES.data").joinpath(f"{self.DATASET_NAME}/pricing.csv")
+
+            df = pd.read_csv(csv_path)
+            df.fillna(0.1, inplace=True)
+
         else:
-            if not self.data_path:
-                csv_path = files("IES.data").joinpath(f"{self.DATASET_NAME}/pricing.csv")
+            df = pd.read_csv(Path(self.data_path))
+        self.electricity_price = df['electricity_price'][self.simulation_start_time_step : self.simulation_end_time_step + 24].to_numpy()
 
-                df = pd.read_csv(csv_path)
-                df.fillna(0.1, inplace=True)
-
-            else:
-                df = pd.read_csv(Path(self.data_path))
-            self.electricity_price = df['electricity_price'][self.simulation_start_time_step : self.simulation_end_time_step + 24].to_numpy()
-
-            if not self.components['power_market']['active']:
-                self.electricity_price = np.zeros_like(self.electricity_price)
+        if not self.components['power_market']['active']:
+            self.electricity_price = np.zeros_like(self.electricity_price)
     
     def reset(self):
         self.time_step = 0
@@ -161,16 +168,22 @@ class Weather:
         # action.update({key: getattr(self, key)[self.time_step] for key in self.observations})
 
     def get_data(self):
-        if self.pred_data:
-            df = pd.DataFrame(self.pred_data['direct_solar_irradiance'], columns=['direct_solar_irradiance'])
-        else:
-            if not self.data_path:
-                csv_path = files("IES.data").joinpath(f"{self.DATASET_NAME}/weather.csv")
-                df = pd.read_csv(csv_path)
-                df.fillna(0.1, inplace=True)
 
+        if self.pred_data:
+            if hasattr(self.pred_data, 'direct_solar_irradiance') or 'direct_solar_irradiance' in self.pred_data:
+                self.direct_solar_irradiance_pred = self.pred_data['direct_solar_irradiance']
             else:
-                df = pd.read_csv(Path(self.data_path))
+                first_key = next(iter(self.pred_data))  # 获取字典中的第一个键
+                shape = np.shape(self.pred_data[first_key])  # 获取其值的维度
+                self.direct_solar_irradiance_pred = np.zeros(shape)
+
+        if not self.data_path:
+            csv_path = files("IES.data").joinpath(f"{self.DATASET_NAME}/weather.csv")
+            df = pd.read_csv(csv_path)
+            df.fillna(0.1, inplace=True)
+
+        else:
+            df = pd.read_csv(Path(self.data_path))
         
         for col in df.columns.to_list():
             setattr(self, col, df[col][self.simulation_start_time_step : self.simulation_end_time_step + 24].to_numpy())
@@ -185,12 +198,16 @@ class solar_thermal_collector:
         self.station_metadata = station_metadata()
         self.area = self.station_metadata.solar_thermal_collector.solar_heat_collector_area
         self.eta = self.station_metadata.solar_thermal_collector.eta_solar_heat
-        self.P_solar_heat = self.get_data()
+        self.get_data()
 
     def get_data(self):
+        if hasattr(self.weather, 'direct_solar_irradiance_pred'):
+            self.P_solar_heat_pred = self.weather.direct_solar_irradiance_pred * self.area * self.eta / max(self.weather.direct_solar_irradiance_pred)
+        
         if  not self.components['direct_solar_irradiance']['active']:
-            return np.zeros_like(self.weather.direct_solar_irradiance)
-        return self.weather.direct_solar_irradiance * self.area * self.eta / max(self.weather.direct_solar_irradiance)
+            self.P_solar_heat = np.zeros_like(self.weather.direct_solar_irradiance)
+        else:
+            self.P_solar_heat = self.weather.direct_solar_irradiance * self.area * self.eta / max(self.weather.direct_solar_irradiance)
     
     def reset(self):
         self.time_step = 0

@@ -24,30 +24,48 @@
 ### 框架
 
 IES/
+
 ├── agent/ (rl, mpc control)
+
 │   ├── ddpg.py
+
 │   ├── sac.py
+
 │   ├── ppo.py
+
 │   ├── mpc.py
 
+
 ├── mpc_env/
+
 │   ├── StationOptEnv.py
 
+
 ├── rl_env/
+
 │   ├── StationLearnEnv.py
 
+
 ├── Utils/
+
 │   ├── station_metadata.py
+
 │   ├── schema.json (存储组件信息)
+
 │   ├── rl_utils.py
+
 │   ├── test_utils.py
+
 
 ├── dataset.py (处理数据)
 
 ├── data/ (数据保存)
 
+
 example/
+
 ├── main_MPC.ipynb (MPC测试)
+
 ├── main_RL.ipynb  (RL测试)
 
 

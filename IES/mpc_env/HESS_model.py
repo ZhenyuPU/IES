@@ -55,6 +55,11 @@ class HESS:
 
         self.T_amb = energy_simulation.indoor_dry_bulb_temperature
 
+        if hasattr(energy_simulation, 'indoor_dry_bulb_temperature_pred'):
+            self.T_amb_pred = energy_simulation.indoor_dry_bulb_temperature_pred
+        else:
+            self.T_amb_pred = energy_simulation.indoor_dry_bulb_temperature
+
         self.capacity = self.station_metadata.hydrogen_storage.capacity
         self.params = self.station_metadata.hydrogen_storage
         self.P_el_high = self.params.P_el_high
@@ -198,7 +203,8 @@ class HESS:
         model.addConstrs(self.p_tank[t] <= self.params.p_tank_high for t in range(T))
 
         ### tank temperature
-        model.addConstrs(self.T_tank[t+1] == self.params.g0 * self.T_tank[t] + self.params.g1 * self.T_amb[t] for t in range(T))
+        model.addConstrs(self.T_tank[t+1] == self.params.g0 * self.T_tank[t] + self.params.g1 * self.T_amb_pred[t] for t in range(T))
+        
         model.addConstr(self.T_tank[0] == self.traces.T_tank[self.time_step])
 
         ############################################################################################ Fuel Cell ####################################################################################################

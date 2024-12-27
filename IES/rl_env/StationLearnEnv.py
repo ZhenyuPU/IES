@@ -177,7 +177,7 @@ class EnergyHubEnvLearn(gym.Env):
 
         violation = balance_elec + balance_heat + balance_cool
         reward = - cost - violation
-        return reward, balance_elec
+        return cost, violation
 
         
     @property
@@ -242,7 +242,7 @@ class power_market:
         self.time_step += 1
 
     def reward(self):
-        return (self.pricing.electricity_price[self.time_step] - self.params.selling_price)/2 * np.abs(self.P_g) + (self.pricing.electricity_price[self.time_step] + self.params.selling_price)/2 * self.P_g
+        return (self.pricing.electricity_price[self.time_step-1] - self.params.selling_price)/2 * np.abs(self.P_g) + (self.pricing.electricity_price[self.time_step-1] + self.params.selling_price)/2 * self.P_g
     
 
 
