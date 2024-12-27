@@ -62,7 +62,7 @@ class EnergyHubEnvLearn(gym.Env):
         self.weather = Weather(components=self.observation, simulation_start_time_step=self.simulation_start_time_step, simulation_end_time_step=self.simulation_end_time_step, DATASET_NAME=DATASET_NAME, data_path=data_path, pred_data=pred_data)
         self.solar_thermal_collector = solar_thermal_collector(self.weather, self.observation)
 
-        self.power_market = power_market(self.pricing)
+        self.power_market = power_market(self.pricing, self.observation)
         self.hydrogen_market = hydrogen_market()
 
         self.electrical_storage = BESS_env()
@@ -75,7 +75,15 @@ class EnergyHubEnvLearn(gym.Env):
 
     @property
     def state_dim(self):
-        return sum(1 for v in self.observation.values() if v.get('active') == True)
+        sum = 0
+        for k, v in self.observation.items():
+            if v['active']:
+                if any(sub in k for sub in ['month', 'hour', 'day_type']):
+                    sum += 2
+                else:
+                    sum += 1
+        return sum
+        # return sum(1 for v in self.observation.values() if v.get('active') == True)
     
     @property
     def action_dim(self):
@@ -117,28 +125,28 @@ class EnergyHubEnvLearn(gym.Env):
 
     
     def norm(self, state_kwargs):
-        state_norm = AttrDict()
+        self.state_norm = AttrDict()
         # sin-cos归一化
         for key, value in state_kwargs.items():
             if any(sub in key for sub in ['month', 'hour', 'day_type']):
                 max_value = max(getattr(self.energy_simulation, key))
-                state_norm[f'{key}_sin'] = self._sin_norm(value, max_value)
-                state_norm[f'{key}_cos'] = self._cos_norm(value, max_value)
+                self.state_norm[f'{key}_sin'] = self._sin_norm(value, max_value)
+                self.state_norm[f'{key}_cos'] = self._cos_norm(value, max_value)
             elif any(sub in key for sub in ['load', 'demand', 'solar_generation', 'indoor_dry_bulb_temperature']):
                 value_max = max(getattr(self.energy_simulation, key))
                 value_min = min(getattr(self.energy_simulation, key))
-                state_norm[f'{key}'] = self.min_max(value, value_min, value_max)
+                self.state_norm[f'{key}'] = self.min_max(value, value_min, value_max)
             elif 'power_market' in key:
                 value_max = max(self.pricing.electricity_price)
                 value_min = min(self.pricing.electricity_price)
-                state_norm[f'{key}'] = self.min_max(value, value_min, value_max)
+                self.state_norm[f'{key}'] = self.min_max(value, value_min, value_max)
             elif 'storage' in key:
-                state_norm[f'{key}'] = value
+                self.state_norm[f'{key}'] = value
             else:
                 value_max = max(getattr(self.weather, key))
                 value_min = min(getattr(self.weather, key))
-                state_norm[f'{key}'] = self.min_max(value, value_min, value_max)
-        return np.array(list(state_norm.values()))
+                self.state_norm[f'{key}'] = self.min_max(value, value_min, value_max)
+        return np.array(list(self.state_norm.values()))
         
     
 
@@ -175,13 +183,20 @@ class EnergyHubEnvLearn(gym.Env):
         return self.norm(self.state_kwargs), reward, done, violation
     
     def reward(self):
-        cost = self.power_market.reward() + self.hydrogen_market.reward() + self.electrical_storage.reward() + self.hydrogen_storage.reward() + self.heating_storage.reward() + self.cooling_storage.reward()
+        if self.observation['power_market']['active'] and not self.action_name['power_market']['active']:
+            P_g = self.hydrogen_storage.P_el + self.electrical_storage.P_bssc + self.energy_simulation.non_shiftable_load[self.time_step] - (self.energy_simulation.solar_generation[self.time_step] + self.hydrogen_storage.P_fc + self.electrical_storage.P_bssd)
 
-        balance_elec = np.max(self.hydrogen_storage.P_el + self.electrical_storage.P_bssc + self.energy_simulation.non_shiftable_load[self.time_step] - self.power_market.P_g - self.energy_simulation.solar_generation[self.time_step] - self.hydrogen_storage.P_fc - self.electrical_storage.P_bssd, 0)
+            self.power_market.P_g = P_g
+            self.power_market.traces.P_g_buy.append(max(P_g, 0))
+            self.power_market.traces.P_g_sell.append(- min(P_g, 0))
+
+        balance_elec = np.max(self.hydrogen_storage.P_el + self.electrical_storage.P_bssc + self.energy_simulation.non_shiftable_load[self.time_step] - (self.power_market.P_g + self.energy_simulation.solar_generation[self.time_step] + self.hydrogen_storage.P_fc + self.electrical_storage.P_bssd), 0)
 
         balance_heat = np.max(self.heating_storage.g_tesc + self.energy_simulation.heating_demand[self.time_step] + self.absorption_chiller.g_ac - (self.hydrogen_storage.g_fc + self.heating_storage.g_tesd + self.solar_thermal_collector.P_solar_heat[self.time_step]), 0)
 
         balance_cool = np.max((self.cooling_storage.q_cssc + self.energy_simulation.cooling_demand[self.time_step]) - (self.absorption_chiller.q_ac  + self.cooling_storage.q_cssd), 0)
+
+        cost = self.power_market.reward() + self.hydrogen_market.reward() + self.electrical_storage.reward() + self.hydrogen_storage.reward() + self.heating_storage.reward() + self.cooling_storage.reward()
 
         violation = balance_elec + balance_heat + balance_cool
         reward = - cost - violation
@@ -229,8 +244,9 @@ class EnergyHubEnvLearn(gym.Env):
 
 
 class power_market:
-    def __init__(self, pricing):
+    def __init__(self, pricing, observation):
         self.station_metadata = station_metadata()
+        self.observation = observation
         self.params = self.station_metadata.power_market
         self.pricing = pricing
         self.time_step = 0
@@ -243,10 +259,16 @@ class power_market:
         )
     
     def step(self, actions):
-        a_g = actions['power_market'] if actions['power_market'] else 0
-        self.P_g = max(a_g * self.params.p_grid_max, 0)
-        self.traces.P_g_buy.append(max(self.P_g, 0))
-        self.traces.P_g_sell.append(- min(self.P_g, 0))
+        if actions['power_market']:
+            a_g = actions['power_market']
+            self.P_g = max(a_g * self.params.p_grid_max, 0)
+            self.traces.P_g_buy.append(max(self.P_g, 0))
+            self.traces.P_g_sell.append(- min(self.P_g, 0))
+        elif not self.observation['power_market']['active']:
+            self.P_g = 0
+            self.traces.P_g_buy.append(max(self.P_g, 0))
+            self.traces.P_g_sell.append(- min(self.P_g, 0))
+       
         self.time_step += 1
 
     def reward(self):

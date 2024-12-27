@@ -143,7 +143,7 @@ class solar_thermal_collector:
 
 
 class power_market:
-      p_grid_max = 20000
+      p_grid_max = 500
       selling_price = 0
 
 class hydrogen_market:
