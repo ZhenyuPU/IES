@@ -1,0 +1,5 @@
+include IES/data/*
+include IES/data/**/*
+include README.md
+recursive-include IES/data *.csv
+recursive-include IES/Utils *.jsons

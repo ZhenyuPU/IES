@@ -1,0 +1,142 @@
+{
+    "random_seed": 2022,
+    "observations": {
+        "month": {
+            "active": true,
+            "dim": 1
+        },
+        "day_type": {
+            "active": true,
+            "dim": 1
+        },
+        "hour": {
+            "active": true,
+            "dim": 1
+        },
+        "non_shiftable_load": {
+            "active": true,
+            "dim": 1
+        },
+        "heating_demand": {
+            "active": true,
+            "dim": 1
+        },
+        "cooling_demand": {
+            "active": true,
+            "dim": 1
+        },
+        "solar_generation": {
+            "active": true,
+            "dim": 1
+        },
+        "direct_solar_irradiance": {
+            "active": true,
+            "dim": 1
+        },
+        "indoor_dry_bulb_temperature": {
+            "active": true,
+            "dim": 1
+        },
+        "outdoor_dry_bulb_temperature": {
+            "active": true,
+            "dim": 1
+        },
+        "outdoor_relative_humidity": {
+            "active": true,
+            "dim": 1
+        },
+        "power_market": {
+            "active": true,
+            "dim": 1
+        },
+        "electrical_storage": {
+            "active": true,
+            "dim": 1
+        },
+        "heating_storage": {
+            "active": true,
+            "dim": 1
+        },
+        "cooling_storage": {
+            "active": true,
+            "dim": 1
+        },
+        "hydrogen_storage": {
+            "active": true,
+            "dim": 4
+        }
+    },
+    "actions": {
+        "power_market": {
+            "active": true
+        },
+        "electrical_storage": {
+            "active": true
+        },
+        "heating_storage": {
+            "active": true
+        },
+        "cooling_storage": {
+            "active": true
+        },
+        "absorption_chiller": {
+            "active": true
+        },
+        "electrolyzer": {
+            "active": true
+        },
+        "fuel_cell": {
+            "active": true
+        },
+        "hydrogen_purchase": {
+            "active": true
+        }
+    },
+    "components": {
+        "power_market": {
+            "active": true
+        },
+        "hydrogen_market": {
+            "active": true
+        },
+        "solar_generation": {
+            "active": true
+        },
+        "direct_solar_irradiance": {
+            "active": true
+        },
+        "non_shiftable_load": {
+            "active": true
+        },
+        "heating_demand": {
+            "active": true
+        },
+        "cooling_demand": {
+            "active": true
+        },
+        "electrical_storage": {
+            "active": true
+        },
+        "hydrogen_storage": {
+            "active": true
+        },
+        "heating_storage": {
+            "active": true
+        },
+        "cooling_storage": {
+            "active": true
+        },
+        "absorption_chiller": {
+            "active": true
+        }
+    },
+    "forecast_name": {
+        "electricity_price": {},
+        "solar": {},
+        "electrical_demand": {},
+        "heating_demand": {},
+        "cooling_demand": {},
+        "temperture_ambient": {},
+        "wind": {}
+    }
+}
