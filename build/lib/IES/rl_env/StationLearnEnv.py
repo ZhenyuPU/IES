@@ -123,7 +123,7 @@ class EnergyHubEnvLearn(gym.Env):
                     self.state_kwargs[key] = getattr(self.weather, key)[self.time_step]
 
 
-    
+    # TODO 验证归一化方式
     def norm(self, state_kwargs):
         self.state_norm = AttrDict()
         # sin-cos归一化
@@ -133,8 +133,8 @@ class EnergyHubEnvLearn(gym.Env):
                 self.state_norm[f'{key}_sin'] = self._sin_norm(value, max_value)
                 self.state_norm[f'{key}_cos'] = self._cos_norm(value, max_value)
             elif any(sub in key for sub in ['load', 'demand', 'solar_generation', 'indoor_dry_bulb_temperature']):
-                value_max = max(getattr(self.energy_simulation, key))
-                value_min = min(getattr(self.energy_simulation, key))
+                value_max = self.energy_simulation.observation_max
+                value_min = self.energy_simulation.observation_min
                 self.state_norm[f'{key}'] = self.min_max(value, value_min, value_max)
             elif 'power_market' in key:
                 value_max = max(self.pricing.electricity_price)
@@ -143,8 +143,8 @@ class EnergyHubEnvLearn(gym.Env):
             elif 'storage' in key:
                 self.state_norm[f'{key}'] = value
             else:
-                value_max = max(getattr(self.weather, key))
-                value_min = min(getattr(self.weather, key))
+                value_max = self.weather.observation_max
+                value_min = self.weather.observation_min
                 self.state_norm[f'{key}'] = self.min_max(value, value_min, value_max)
         return np.array(list(self.state_norm.values()))
         

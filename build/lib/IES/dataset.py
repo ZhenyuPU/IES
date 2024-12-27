@@ -38,6 +38,8 @@ class energy_simulation:
 
         self.get_data()
 
+        self.observation_max, self.observation_min = self.get_observation_min_max()
+
     def reset(self):
         self.time_step = 0
     
@@ -87,6 +89,15 @@ class energy_simulation:
 
         
         self.observations = df.columns.to_list() 
+
+    def get_observation_min_max(self):
+        min_value = 0
+        max_value = 0
+        for key, value in self.components.items():
+            if value['active']:
+                max_value = max(max(getattr(self, key)), max_value)
+                min_value = min(min(getattr(self, key)), min_value)
+        return max_value + 1e-3, min_value
 
 
     
@@ -159,6 +170,7 @@ class Weather:
         self.pred_data = pred_data
         self.DATASET_NAME = DATASET_NAME
         self.get_data()
+        self.observation_max, self.observation_min = self.get_observation_min_max()
 
     def reset(self):
         self.time_step = 0
@@ -189,6 +201,15 @@ class Weather:
             setattr(self, col, df[col][self.simulation_start_time_step : self.simulation_end_time_step + 24].to_numpy())
 
         self.observations = df.columns.to_list() 
+    
+    def get_observation_min_max(self):
+        min_value = 0
+        max_value = 0
+        for key, value in self.components.items():
+            if value['active']:
+                max_value = max(max(getattr(self, key)), max_value)
+                min_value = min(min(getattr(self, key)), min_value)
+        return max_value + 1e-3, min_value
 
 
 class solar_thermal_collector:
