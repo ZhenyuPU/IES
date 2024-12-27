@@ -73,6 +73,14 @@ class EnergyHubEnvLearn(gym.Env):
 
         # TODO self.state_space, self.action_space
 
+    @property
+    def state_dim(self):
+        return sum(1 for v in self.observation.values() if v.get('active') == True)
+    
+    @property
+    def action_dim(self):
+        return sum(1 for v in self.action_name.values() if v.get('active') == True)
+
     def reset(self):
         self.time_step = 0
         self.power_market.reset()
