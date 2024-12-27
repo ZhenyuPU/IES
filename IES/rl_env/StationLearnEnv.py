@@ -123,7 +123,7 @@ class EnergyHubEnvLearn(gym.Env):
                     self.state_kwargs[key] = getattr(self.weather, key)[self.time_step]
 
 
-    
+    # TODO 修改归一化方式
     def norm(self, state_kwargs):
         self.state_norm = AttrDict()
         # sin-cos归一化
